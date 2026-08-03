@@ -23,7 +23,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     # Clear old FAISS cache and rebuild FAISS + retriever + rag chain
     reset_vector_db()
     reset_rag_chain()
-    r=get_rag_chain(force_rebuild=True)
+    get_rag_chain(force_rebuild=True)
 
     return {
         "status": "success",

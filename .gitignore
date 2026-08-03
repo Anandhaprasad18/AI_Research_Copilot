@@ -5,4 +5,4 @@ __pycache__/
 venv/
 data/pdfs/*.pdf
 !data/pdfs/.gitkeep
-.streamlit/
+
