@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.auth import router as auth_router
 from api.chat import router as chat_router
 from api.upload import router as upload_router
 
@@ -22,6 +23,7 @@ app.add_middleware(
 # ----------------------------
 # Register APIs
 # ----------------------------
+app.include_router(auth_router)
 app.include_router(upload_router)
 app.include_router(chat_router)
 
@@ -88,6 +90,7 @@ HTML_PAGE = """
     background: var(--bg-dark);
     z-index: 10;
     flex-shrink: 0;
+    gap: 16px;
   }
   header .brand {
     display: flex;
@@ -128,6 +131,54 @@ HTML_PAGE = """
   @media (max-width: 900px) {
     main { grid-template-columns: 1fr; }
     .sidebar { display: none; }
+  }
+
+  .auth-card, .document-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .auth-card input, .document-card select, .document-card .document-radios {
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-dark);
+    color: var(--text-main);
+  }
+  .document-card .document-radios {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 180px;
+    overflow-y: auto;
+    border-radius: 12px;
+  }
+  .document-card .document-radios label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: var(--text-main);
+    cursor: pointer;
+  }
+  .document-card .document-radios input {
+    accent-color: #10b981;
+  }
+  .auth-card button, .document-card button {
+    margin-top: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    background: var(--text-main);
+    color: var(--bg-dark);
+    font-weight: 600;
   }
 
   /* Sidebar / Upload */
@@ -369,12 +420,24 @@ HTML_PAGE = """
 
 <header>
   <div class="brand"><span class="logo">✦</span> AI Research Copilot</div>
-  <div class="status"><span class="dot"></span> System Online</div>
+  <div class="status" id="statusBadge"><span class="dot"></span> System Online</div>
 </header>
 
 <main>
   <!-- Sidebar -->
   <aside class="sidebar">
+    <div class="auth-card">
+      <h2>Access</h2>
+      <input id="usernameInput" placeholder="Your name" />
+      <input id="passwordInput" type="password" placeholder="Password (admin)" />
+      <button id="loginBtn">Enter workspace</button>
+      <div id="loginMessage" style="margin-top:8px;color:#a3a3a3;font-size:0.8rem;"></div>
+    </div>
+    <div class="document-card">
+      <h2>Active document</h2>
+      <div id="documentRadioGroup" class="document-radios"></div>
+      <button id="switchDocumentBtn">Use selected document</button>
+    </div>
     <h2>Knowledge Base</h2>
     <div class="dropzone" id="dropzone">
       <div style="margin-bottom: 8px;">📄</div>
@@ -412,17 +475,117 @@ HTML_PAGE = """
 // Configure marked.js to handle markdown formatting cleanly
 marked.setOptions({ breaks: true, gfm: true });
 
-const dropzone    = document.getElementById('dropzone');
-const fileInput   = document.getElementById('fileInput');
-const fileList    = document.getElementById('fileList');
-const chatWindow  = document.getElementById('chatWindow');
+const dropzone      = document.getElementById('dropzone');
+const fileInput     = document.getElementById('fileInput');
+const fileList      = document.getElementById('fileList');
+const chatWindow    = document.getElementById('chatWindow');
 const questionInput = document.getElementById('questionInput');
-const sendBtn     = document.getElementById('sendBtn');
+const sendBtn       = document.getElementById('sendBtn');
+const usernameInput = document.getElementById('usernameInput');
+const passwordInput = document.getElementById('passwordInput');
+const loginBtn      = document.getElementById('loginBtn');
+const loginMessage  = document.getElementById('loginMessage');
+const statusBadge   = document.getElementById('statusBadge');
+const documentRadioGroup = document.getElementById('documentRadioGroup');
+const switchDocumentBtn = document.getElementById('switchDocumentBtn');
+let currentUser = '';
+let currentDocuments = [];
 
 // Toggle the send button state based on the input string length
 questionInput.addEventListener('input', () => {
   sendBtn.disabled = questionInput.value.trim().length === 0;
 });
+
+// ---------- Login / session handling ----------
+async function loginUser() {
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+  if (!username || !password) {
+    loginMessage.textContent = 'Enter your name and the admin password to continue.';
+    return;
+  }
+
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      loginMessage.textContent = data.detail || 'Login failed.';
+      return;
+    }
+
+    currentUser = data.username;
+    statusBadge.innerHTML = '<span class="dot"></span> Logged in as ' + currentUser;
+    loginMessage.textContent = 'Workspace ready. Upload documents and start chatting.';
+    await loadDocuments();
+    addUserMessage(`Welcome ${currentUser}! I will personalize answers for you.`);
+  } catch (err) {
+    console.error('Login fetch failed', err);
+    loginMessage.textContent = 'Could not reach the login service: ' + (err.message || err);
+  }
+}
+
+async function loadDocuments() {
+  if (!currentUser) return;
+  try {
+    const res = await fetch(`/documents?username=${encodeURIComponent(currentUser)}`);
+    const data = await res.json();
+    currentDocuments = data.documents || [];
+    documentRadioGroup.innerHTML = '';
+    if (currentDocuments.length === 0) {
+      documentRadioGroup.innerHTML = '<div style="color:#a3a3a3;font-size:0.85rem;">No documents uploaded yet.</div>';
+      fileList.innerHTML = '';
+      return;
+    }
+
+    const activeDoc = data.active_document || currentDocuments[0];
+    documentRadioGroup.innerHTML = currentDocuments
+      .map((doc, index) => `
+        <label>
+          <input type="radio" name="document" value="${doc}" ${doc === activeDoc ? 'checked' : ''} />
+          ${doc}
+        </label>
+      `)
+      .join('');
+
+    fileList.innerHTML = currentDocuments
+      .map(doc => `<div class='file-item'><span class='name'>${doc}</span><span class='badge ok'>${doc === activeDoc ? 'Active' : 'Saved'}</span></div>`)
+      .join('');
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function getSelectedDocument() {
+  const radio = documentRadioGroup.querySelector('input[name="document"]:checked');
+  return radio ? radio.value : (currentDocuments[0] || '');
+}
+
+async function switchDocument() {
+  if (!currentUser) {
+    loginMessage.textContent = 'Log in first to choose a document.';
+    return;
+  }
+  const documentName = getSelectedDocument();
+  if (!documentName) return;
+  try {
+    const res = await fetch('/set-active-document', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: currentUser, document_name: documentName })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      loginMessage.textContent = `Using ${data.active_document} for this session.`;
+      await loadDocuments();
+    }
+  } catch (err) {
+    loginMessage.textContent = 'Could not switch document.';
+  }
+}
 
 // ---------- Upload handling ----------
 dropzone.addEventListener('click', () => fileInput.click());
@@ -455,12 +618,18 @@ async function uploadFile(file) {
 
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('username', currentUser || usernameInput.value.trim() || 'guest');
 
   try {
     const res = await fetch('/upload', { method: 'POST', body: formData });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       row.querySelector('.badge').textContent = 'Indexed';
       row.querySelector('.badge').className = 'badge ok';
+      if (data.active_document) {
+        loginMessage.textContent = `Saved ${file.name} and switched to ${data.active_document}.`;
+      }
+      await loadDocuments();
     } else {
       row.querySelector('.badge').textContent = 'Error';
       row.querySelector('.badge').className = 'badge error';
@@ -569,7 +738,11 @@ async function sendQuestion() {
     const res = await fetch('/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({
+        question,
+        username: currentUser || usernameInput.value.trim() || 'guest',
+        active_document: getSelectedDocument(),
+      }),
     });
     
     const data = await res.json();
@@ -588,6 +761,9 @@ async function sendQuestion() {
   }
 }
 
+loginBtn.addEventListener('click', loginUser);
+passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginUser(); });
+switchDocumentBtn.addEventListener('click', switchDocument);
 sendBtn.addEventListener('click', sendQuestion);
 questionInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') sendQuestion();
