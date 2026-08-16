@@ -15,6 +15,7 @@ COPY requirements.txt ./
 
 # Install build dependencies, install Python packages, clean up aggressively
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && pip install --user --no-cache-dir -r python-multipart \
     && pip install --user --no-cache-dir -r requirements.txt \
     && apt-get remove -y build-essential \
     && apt-get autoremove -y \
