@@ -112,3 +112,110 @@ Then open `http://127.0.0.1:8000` in your browser.
 - If the web UI cannot reach the server, verify `uvicorn` is running and the browser is loading `http://127.0.0.1:8000`.
 - If chat requests are returning errors, confirm the active document exists for the current user.
 - If the app cannot create user storage, ensure the process has write permissions for `data/users`.
+
+## Deploying to Fly.io (quick)
+
+1. Install `flyctl` and create an app: `flyctl launch --name your-app-name`.
+2. Set required secrets in your Fly app:
+
+```bash
+flyctl secrets set GROQ_API_KEY=your_groq_api_key_here
+flyctl secrets set OTHER_SECRET=secret_value
+```
+
+3. Update `fly.toml`'s `app` value with your Fly app name.
+4. Push from GitHub; the included GitHub Actions workflow (`.github/workflows/deploy-fly.yml`) will run on pushes to `main` and deploy automatically. Ensure you add `FLY_API_TOKEN` and `GROQ_API_KEY` to your repository secrets.
+
+Notes:
+- The app saves FAISS indexes and uploaded PDFs under `data/` — mount a persistent volume on Fly (use `flyctl volumes create`) or expect rebuilds on instance restarts.
+- For multi-instance horizontal scaling, consider using a hosted vector DB (Weaviate/Chroma/Pinecone) and external object storage for uploads.
+
+## Production deployment (recommended checklist)
+
+Follow this checklist to prepare the app for production-level deployment:
+
+- **Pin Python/runtime**: choose and document a Python version (3.11 recommended) and pin dependencies in `requirements.txt` or a constraints file.
+- **Secrets management**: use cloud secret storage (Fly secrets, GitHub secrets, AWS Secrets Manager). Do NOT commit `.env`.
+- **Persistent storage**: mount a persistent volume for `data/` so uploaded PDFs and FAISS indexes survive restarts.
+- **Vector DB strategy**: either persist FAISS indexes to disk (current approach) or migrate to a hosted vector DB (Weaviate, Pinecone, Chroma Cloud) for multi-instance scaling.
+- **HTTPS & domain**: configure TLS via the platform (Fly, Render, etc.) or front a CDN/load balancer.
+- **Authentication**: replace the fixed `admin` password with real auth (OAuth, Auth0, or API key gating) when exposing publicly.
+- **Resource sizing**: embeddings and FAISS builds can be memory/CPU intensive; provision sufficient CPU/RAM or use background jobs to build indexes.
+- **Monitoring & logging**: send logs to a centralized service (Papertrail, Logflare, Datadog) and enable platform health checks (use `/health`).
+- **Backups**: schedule periodic backups of `data/` (PDFs + vectordb) to object storage (S3-compatible) and export backups off-host.
+
+## Environment variables
+
+Set these in your production environment (via secrets or platform env settings):
+
+- `GROQ_API_KEY` — API key for Groq (or set to empty to use the DummyLLM).
+- `GROQ_MODEL` — model name (optional).
+- `PORT` — port to bind the HTTP server (platform usually sets this).
+
+Add any other provider-specific secrets (e.g., S3 credentials) as needed.
+
+## Persistent FAISS / Storage
+
+This repo now persists FAISS indexes under `data/vectordb/<username>/<document>/` and user uploads under `data/users/`. For production you should:
+
+- Mount `./data` as a persistent volume in the cloud (Fly volumes, Render persistent disks, or an attached EBS volume on AWS).
+- Alternatively, migrate to a hosted vector DB and store uploads in object storage (S3) so app instances can be stateless.
+
+Quick Fly.io volume example:
+
+```bash
+flyctl volumes create ai-data --size 3 --region ord
+# update fly.toml or attach the volume when configuring the app
+```
+
+## CI/CD recommendations
+
+- The repo includes `.github/workflows/deploy-fly.yml` to deploy to Fly.io. Add `FLY_API_TOKEN` and `GROQ_API_KEY` as GitHub repository secrets.
+- For Render or Railway, use their GitHub integration and set env/secret variables in the service dashboard.
+- For AWS: build and push a Docker image to ECR and deploy via ECS/Fargate or EKS. Use EFS or S3 for persistent storage.
+
+Example GitHub Actions flow (concept):
+
+1. Checkout code
+2. Build Docker image (or use platform remote build)
+3. Authenticate to platform (Fly/Render/ECR)
+4. Deploy and set environment secrets
+
+## Scaling & performance
+
+- For low-latency inference, keep the app single-instance only if using persisted local FAISS. To scale horizontally, use a centralized vector DB and shared object storage so multiple instances can serve traffic.
+- Offload heavy index-building to a background worker or queue (Celery/RQ). Build indexes on upload asynchronously and notify users when ready.
+- Consider model size and embedding cost: use smaller embedding models or batch embeddings to reduce cost.
+
+## Security hardening
+
+- Replace fixed password auth with OAuth2, JWT, or API-key based auth. Protect the upload endpoints and admin routes.
+- Rate-limit endpoints to prevent abuse.
+- Sanitize and validate uploaded PDFs; prevent zip-bombs and large uploads.
+
+## Monitoring & operations
+
+- Use platform health checks pointing to `/health`.
+- Export metrics (Prometheus) and integrate with alerts for CPU/memory, error rates, and queue backlogs.
+- Periodically re-index or prune vectordb to remove stale data and control storage costs.
+
+## Example production deploy flows (short)
+
+- Fly.io: good free tier for small apps and supports persistent volumes. Use the provided `fly.toml` and GitHub Action.
+- Render: easy Docker deploys and persistent disks; use their web UI to connect GitHub and set secrets.
+- Railway: quick deployments but persistent volumes are limited on free tier.
+- AWS (ECR + ECS/Fargate): production-grade, supports EFS for persistent volumes; more setup but highly configurable.
+- GCP Cloud Run: fully managed serverless containers; needs external object storage (GCS) and hosted vector DB for multi-instance support.
+
+## Operational checklist before public launch
+
+1. Verify secrets are only in platform secret storage.
+2. Confirm `data/` is persisted and backed up.
+3. Replace the fixed `admin` password or disable direct public signups.
+4. Run a load test for expected concurrent users and observe memory/CPU under load.
+5. Configure TLS and domain.
+6. Set up monitoring and alerting.
+
+---
+
+If you'd like, I can: (A) add a sample `docker-compose.prod.yml` and `systemd` unit file, (B) add a background worker skeleton for async indexing, or (C) create a Render/Railway/GCP deploy workflow. Tell me which and I'll implement it.

@@ -16,6 +16,10 @@ def rag(state: State):
 
 def search(state: State):
     question = state["question"]
+    rag=state.get("rag_answer", "")
+    if rag:
+        state["web_result"]=search_tool.invoke(f"{question} this is the document = {rag}")
+        return state
     state["web_result"] = search_tool.invoke(question)
     return state
 
