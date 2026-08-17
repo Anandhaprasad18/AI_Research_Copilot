@@ -2,7 +2,7 @@
 
 An AI-powered research assistant that lets users upload research papers, build document-specific knowledge bases, and ask questions using Retrieval-Augmented Generation (RAG) with optional web search.
 
-**Live Demo:** [Railway-hosted deployment](#)
+**Live Demo:** [Railway-hosted deployment]((https://airesearchcopilot-production.up.railway.app)
 
 ---
 
