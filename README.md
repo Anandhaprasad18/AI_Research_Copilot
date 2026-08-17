@@ -1,221 +1,399 @@
-﻿# AI Research Copilot
+🔬 AI Research Copilot
 
-A FastAPI-based PDF research assistant with user-aware document selection, personal profiles, and RAG-powered answers.
+«An AI-powered research assistant that lets users upload research papers, build document-specific knowledge bases, and ask questions using Retrieval-Augmented Generation (RAG) with optional web search.»
 
-## What this project does
+🌐 Live Demo: [Railway-hosted deployment](https://airesearchcopilot-production.up.railway.app/?utm_source=chatgpt.com)
 
-- Provides a web UI for user login and PDF upload
-- Stores per-user documents in `data/users/<username>/documents`
-- Keeps each user's active document and personalization in `data/users/<username>/profile.json`
-- Uses LangGraph + LangChain + Groq to route questions to:
-  - RAG-only responses from PDF content
-  - Web search responses
-  - Hybrid responses combining PDF context and web search
 
-## Key features
 
-- Login with any username and the fixed password `admin`
-- Upload PDF files via the sidebar
-- Choose which uploaded document should be active for the current session
-- Preserve the active document per user across requests
-- Send the selected document into the chat/RAG pipeline for consistent context
+✨ Overview
 
-## Project structure
+AI Research Copilot is a FastAPI-based research assistant designed to make working with research papers easier.
 
-```
-main.py              # FastAPI app + frontend HTML/JS
-config.py            # Environment/config loader and shared Groq LLM
-api/
-  auth.py            # Login endpoint and user authentication
-  chat.py            # Chat endpoint that passes active_document to the graph
-  upload.py          # Upload/document list and active-document management
-data/
-  users/             # User-specific storage for profiles and PDFs
-    <username>/      # Created per login/user
-      documents/     # Uploaded PDFs for that user
-      profile.json   # Active document, personalization, login defaults
-graph/
-  graph.py           # LangGraph graph builder and compiled graph
-  nodes.py           # rag / search / both / writter runtime nodes
-  router.py          # simple route decision logic
-  state.py           # shared state model for LangGraph
-rag/
-  chain.py           # cached RAG chain builder per user/document
-  embeddings.py      # embedding model loader (HuggingFace)
-  retriever.py       # retriever builder using FAISS
-  splitter.py        # PDF chunking/splitting logic
-  vectordb.py        # per-user/document FAISS store cache and reset logic
-tools/
-  search.py          # DuckDuckGo web search tool
-requirements.txt     # Python dependencies
-README.md            # This documentation
-```
+Users can:
 
-## Setup
+- 🔐 Create a user session
+- 📄 Upload research papers as PDFs
+- 📚 Maintain multiple documents
+- 🎯 Select an active document for context
+- 💬 Ask questions about the selected paper
+- 🔎 Perform web searches when external information is required
+- 🧠 Combine information from uploaded documents and the web
+- ⚡ Generate contextual answers using an LLM
 
-1. Install dependencies:
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-2. Set the Groq API key in a `.env` file at the repo root:
-   ```env
-   GROQ_API_KEY=your_groq_api_key_here
-   ```
-
-3. Make sure the project files are available and the working directory is `AI_Research_Copilot`.
-
-## Run the app
-
-```bash
-py -3.12 -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Then open `http://127.0.0.1:8000` in your browser.
-
-## How to use
-
-1. Enter a username and password `admin` on the left panel.
-2. Upload one or more PDFs using the drag-and-drop area or file selector.
-3. Choose the active document via the document radio buttons.
-4. Ask questions in the chat input. The app will use the selected PDF as the active knowledge source.
-
-## User storage
-
-- `data/users/<username>/profile.json`
-  - `username`
-  - `password` (fixed to `admin`)
-  - `personalization`
-  - `active_document`
-- `data/users/<username>/documents/`
-  - Stored PDF files for that user
-
-## Important endpoints
-
-- `POST /login` — login and initialize user profile
-- `GET /documents?username=<username>` — list uploaded documents and active document
-- `POST /upload` — upload a PDF for a user and set it active
-- `POST /set-active-document` — switch the active document for the user
-- `POST /chat` — ask a question, sending `active_document` to the backend
-
-## Notes
-
-- The application uses a fixed login password `admin` for simplicity.
-- Uploaded documents are kept per username, so different users can manage separate knowledge bases.
-- Active document selection is preserved across chat requests and used by the RAG pipeline.
-- If the server is restarted, uploaded files and user profiles remain in `data/users`.
-
-## Troubleshooting
-
-- If the web UI cannot reach the server, verify `uvicorn` is running and the browser is loading `http://127.0.0.1:8000`.
-- If chat requests are returning errors, confirm the active document exists for the current user.
-- If the app cannot create user storage, ensure the process has write permissions for `data/users`.
-
-## Deploying to Fly.io (quick)
-
-1. Install `flyctl` and create an app: `flyctl launch --name your-app-name`.
-2. Set required secrets in your Fly app:
-
-```bash
-flyctl secrets set GROQ_API_KEY=your_groq_api_key_here
-flyctl secrets set OTHER_SECRET=secret_value
-```
-
-3. Update `fly.toml`'s `app` value with your Fly app name.
-4. Push from GitHub; the included GitHub Actions workflow (`.github/workflows/deploy-fly.yml`) will run on pushes to `main` and deploy automatically. Ensure you add `FLY_API_TOKEN` and `GROQ_API_KEY` to your repository secrets.
-
-Notes:
-- The app saves FAISS indexes and uploaded PDFs under `data/` — mount a persistent volume on Fly (use `flyctl volumes create`) or expect rebuilds on instance restarts.
-- For multi-instance horizontal scaling, consider using a hosted vector DB (Weaviate/Chroma/Pinecone) and external object storage for uploads.
-
-## Production deployment (recommended checklist)
-
-Follow this checklist to prepare the app for production-level deployment:
-
-- **Pin Python/runtime**: choose and document a Python version (3.11 recommended) and pin dependencies in `requirements.txt` or a constraints file.
-- **Secrets management**: use cloud secret storage (Fly secrets, GitHub secrets, AWS Secrets Manager). Do NOT commit `.env`.
-- **Persistent storage**: mount a persistent volume for `data/` so uploaded PDFs and FAISS indexes survive restarts.
-- **Vector DB strategy**: either persist FAISS indexes to disk (current approach) or migrate to a hosted vector DB (Weaviate, Pinecone, Chroma Cloud) for multi-instance scaling.
-- **HTTPS & domain**: configure TLS via the platform (Fly, Render, etc.) or front a CDN/load balancer.
-- **Authentication**: replace the fixed `admin` password with real auth (OAuth, Auth0, or API key gating) when exposing publicly.
-- **Resource sizing**: embeddings and FAISS builds can be memory/CPU intensive; provision sufficient CPU/RAM or use background jobs to build indexes.
-- **Monitoring & logging**: send logs to a centralized service (Papertrail, Logflare, Datadog) and enable platform health checks (use `/health`).
-- **Backups**: schedule periodic backups of `data/` (PDFs + vectordb) to object storage (S3-compatible) and export backups off-host.
-
-## Environment variables
-
-Set these in your production environment (via secrets or platform env settings):
-
-- `GROQ_API_KEY` — API key for Groq (or set to empty to use the DummyLLM).
-- `GROQ_MODEL` — model name (optional).
-- `PORT` — port to bind the HTTP server (platform usually sets this).
-
-Add any other provider-specific secrets (e.g., S3 credentials) as needed.
-
-## Persistent FAISS / Storage
-
-This repo now persists FAISS indexes under `data/vectordb/<username>/<document>/` and user uploads under `data/users/`. For production you should:
-
-- Mount `./data` as a persistent volume in the cloud (Fly volumes, Render persistent disks, or an attached EBS volume on AWS).
-- Alternatively, migrate to a hosted vector DB and store uploads in object storage (S3) so app instances can be stateless.
-
-Quick Fly.io volume example:
-
-```bash
-flyctl volumes create ai-data --size 3 --region ord
-# update fly.toml or attach the volume when configuring the app
-```
-
-## CI/CD recommendations
-
-- The repo includes `.github/workflows/deploy-fly.yml` to deploy to Fly.io. Add `FLY_API_TOKEN` and `GROQ_API_KEY` as GitHub repository secrets.
-- For Render or Railway, use their GitHub integration and set env/secret variables in the service dashboard.
-- For AWS: build and push a Docker image to ECR and deploy via ECS/Fargate or EKS. Use EFS or S3 for persistent storage.
-
-Example GitHub Actions flow (concept):
-
-1. Checkout code
-2. Build Docker image (or use platform remote build)
-3. Authenticate to platform (Fly/Render/ECR)
-4. Deploy and set environment secrets
-
-## Scaling & performance
-
-- For low-latency inference, keep the app single-instance only if using persisted local FAISS. To scale horizontally, use a centralized vector DB and shared object storage so multiple instances can serve traffic.
-- Offload heavy index-building to a background worker or queue (Celery/RQ). Build indexes on upload asynchronously and notify users when ready.
-- Consider model size and embedding cost: use smaller embedding models or batch embeddings to reduce cost.
-
-## Security hardening
-
-- Replace fixed password auth with OAuth2, JWT, or API-key based auth. Protect the upload endpoints and admin routes.
-- Rate-limit endpoints to prevent abuse.
-- Sanitize and validate uploaded PDFs; prevent zip-bombs and large uploads.
-
-## Monitoring & operations
-
-- Use platform health checks pointing to `/health`.
-- Export metrics (Prometheus) and integrate with alerts for CPU/memory, error rates, and queue backlogs.
-- Periodically re-index or prune vectordb to remove stale data and control storage costs.
-
-## Example production deploy flows (short)
-
-- Fly.io: good free tier for small apps and supports persistent volumes. Use the provided `fly.toml` and GitHub Action.
-- Render: easy Docker deploys and persistent disks; use their web UI to connect GitHub and set secrets.
-- Railway: quick deployments but persistent volumes are limited on free tier.
-- AWS (ECR + ECS/Fargate): production-grade, supports EFS for persistent volumes; more setup but highly configurable.
-- GCP Cloud Run: fully managed serverless containers; needs external object storage (GCS) and hosted vector DB for multi-instance support.
-
-## Operational checklist before public launch
-
-1. Verify secrets are only in platform secret storage.
-2. Confirm `data/` is persisted and backed up.
-3. Replace the fixed `admin` password or disable direct public signups.
-4. Run a load test for expected concurrent users and observe memory/CPU under load.
-5. Configure TLS and domain.
-6. Set up monitoring and alerting.
+The application combines RAG, LangGraph, LangChain, FAISS, Hugging Face embeddings, web search, and Groq-powered LLM inference into a single workflow.
 
 ---
 
-If you'd like, I can: (A) add a sample `docker-compose.prod.yml` and `systemd` unit file, (B) add a background worker skeleton for async indexing, or (C) create a Render/Railway/GCP deploy workflow. Tell me which and I'll implement it.
+🚀 Live Application
+
+The application is deployed as a Dockerized FastAPI service.
+
+Live Demo:
+AI Research Copilot — Railway deployment
+
+---
+
+🧠 How It Works
+
+The application follows a document-aware RAG pipeline:
+
+                    ┌──────────────────┐
+                    │      User        │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │    FastAPI API   │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │   LangGraph      │
+                    │     Router       │
+                    └────────┬─────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+              ▼              ▼              ▼
+         ┌─────────┐    ┌──────────┐   ┌──────────┐
+         │   RAG   │    │ Web      │   │ Hybrid   │
+         │ Pipeline│    │ Search   │   │ Pipeline │
+         └────┬────┘    └────┬─────┘   └────┬─────┘
+              │              │              │
+              └──────────────┼──────────────┘
+                             ▼
+                    ┌──────────────────┐
+                    │   Groq LLM       │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │    Final Answer  │
+                    └──────────────────┘
+
+RAG Pipeline
+
+When a PDF is uploaded:
+
+PDF
+ ↓
+Text Extraction
+ ↓
+Chunking
+ ↓
+Hugging Face Embeddings
+ ↓
+FAISS Vector Store
+ ↓
+Similarity Retrieval
+ ↓
+Relevant Context
+ ↓
+LLM
+ ↓
+Answer
+
+This allows the model to answer questions using the actual contents of the uploaded research paper instead of relying only on its pretrained knowledge.
+
+---
+
+🧩 Key Features
+
+📄 Document-Aware RAG
+
+Each uploaded document can be processed into its own vector representation.
+
+The selected document becomes the active knowledge source for subsequent questions.
+
+🔎 Web Search
+
+The system can route questions toward web search when information outside the uploaded document is required.
+
+🔀 Hybrid Retrieval
+
+The LangGraph workflow supports combining:
+
+- Retrieved PDF context
+- Web search results
+- LLM reasoning
+
+This allows the system to answer questions requiring both paper-specific information and external knowledge.
+
+👤 User-Aware Storage
+
+Documents and user state are organized separately.
+
+data/
+└── users/
+    └── <username>/
+        ├── documents/
+        │   ├── paper1.pdf
+        │   └── paper2.pdf
+        └── profile.json
+
+🎯 Active Document Selection
+
+Users can upload multiple PDFs and explicitly choose which document should be used as the active knowledge source.
+
+---
+
+🛠️ Tech Stack
+
+Category| Technology
+Backend| FastAPI
+LLM| Groq
+Agent Orchestration| LangGraph
+LLM Framework| LangChain
+Embeddings| Hugging Face
+Vector Database| FAISS
+Web Search| DuckDuckGo
+Containerization| Docker
+Deployment| Railway
+Database / Storage| Supabase
+Language| Python 3.11
+
+---
+
+📁 Project Structure
+
+AI_Research_Copilot/
+│
+├── agents/
+│   └── rag_agent.py
+│
+├── api/
+│   ├── auth.py
+│   ├── chat.py
+│   └── upload.py
+│
+├── data/
+│   └── pdfs/
+│
+├── graph/
+│   ├── graph.py
+│   ├── nodes.py
+│   ├── router.py
+│   └── state.py
+│
+├── rag/
+│   ├── chain.py
+│   ├── embeddings.py
+│   ├── loader.py
+│   ├── retriever.py
+│   ├── splitter.py
+│   └── vectordb.py
+│
+├── supabase/
+│   └── migrations/
+│
+├── tools/
+│   └── search.py
+│
+├── utils/
+│   ├── supabase_client.py
+│   └── user_state.py
+│
+├── .dockerignore
+├── .env.example
+├── .gitignore
+├── Dockerfile
+├── docker-compose.yml
+├── config.py
+├── main.py
+└── requirements.txt
+
+---
+
+⚙️ Local Setup
+
+1. Clone the repository
+
+git clone <repository-url>
+cd AI_Research_Copilot
+
+2. Create a virtual environment
+
+python -m venv .venv
+
+Activate it on Windows:
+
+.venv\Scripts\activate
+
+3. Install dependencies
+
+pip install -r requirements.txt
+
+4. Configure environment variables
+
+Create a ".env" file:
+
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=your_model_name
+
+Add any additional Supabase configuration required by the application.
+
+5. Run the application
+
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+
+Then open:
+
+http://127.0.0.1:8000
+
+---
+
+🐳 Running with Docker
+
+Build the image:
+
+docker build -t ai-research-copilot .
+
+Run the container:
+
+docker run -p 8000:8000 --env-file .env ai-research-copilot
+
+The application will then be available locally on port "8000".
+
+Docker Architecture
+
+Dockerfile
+    ↓
+Docker Image
+    ↓
+Container
+    ↓
+FastAPI + Uvicorn
+    ↓
+Application
+
+---
+
+☁️ Deployment
+
+The application is deployed using a Docker-based deployment workflow.
+
+GitHub Repository
+       │
+       ▼
+    Railway
+       │
+       ▼
+Docker Build
+       │
+       ▼
+Docker Image
+       │
+       ▼
+Running Container
+       │
+       ▼
+FastAPI Application
+
+Railway builds the application from the repository's "Dockerfile" and runs the resulting container.
+
+Environment secrets such as API keys should be configured through the deployment platform rather than committed to the repository.
+
+---
+
+🔐 Security Notes
+
+This project is primarily a learning and portfolio project and should not be considered production-grade authentication in its current form.
+
+Before exposing the application to real users, the following should be improved:
+
+- Replace simplified authentication with proper authentication
+- Hash passwords
+- Add authorization checks
+- Validate uploaded files
+- Limit upload size
+- Add API rate limiting
+- Protect sensitive endpoints
+- Move persistent files to proper object storage
+- Use production-grade user/session management
+- Add monitoring and logging
+
+Never commit ".env" files or API keys to GitHub.
+
+---
+
+💾 Storage Considerations
+
+The current application uses local filesystem storage for uploaded documents and locally generated vector data.
+
+This works well for:
+
+- Learning
+- Demonstrations
+- Small-scale testing
+- Portfolio projects
+
+However, ephemeral cloud containers can lose local files when the underlying storage is recreated.
+
+For a larger production system, uploaded documents should be stored in persistent object storage and vector indexes should be stored in a persistent or managed vector database.
+
+---
+
+📌 Current Limitations
+
+This project is intentionally lightweight and has several areas that could be improved:
+
+- Authentication is simplified
+- Local filesystem storage limits horizontal scalability
+- FAISS indexes are tied to local storage
+- Large PDFs can increase memory usage
+- Embedding/index creation can be computationally expensive
+- No sophisticated authorization system
+- No production-grade observability yet
+
+These are deliberate trade-offs for keeping the project simple and understandable.
+
+---
+
+🔮 Future Improvements
+
+Potential improvements include:
+
+- [ ] OAuth / JWT authentication
+- [ ] Persistent object storage for PDFs
+- [ ] Managed vector database
+- [ ] Streaming LLM responses
+- [ ] Citation-aware answers
+- [ ] Multi-document retrieval
+- [ ] Conversation history
+- [ ] Research-paper metadata extraction
+- [ ] Automatic paper summarization
+- [ ] Background document processing
+- [ ] Rate limiting
+- [ ] Production monitoring
+- [ ] Automated testing and CI/CD
+
+---
+
+🎯 What I Learned From This Project
+
+This project was built to explore how modern AI applications are assembled end-to-end.
+
+Key concepts explored:
+
+- Retrieval-Augmented Generation (RAG)
+- Vector embeddings
+- Semantic search
+- FAISS
+- LangChain
+- LangGraph
+- Agentic routing
+- LLM inference
+- FastAPI
+- Docker
+- Environment-based configuration
+- Cloud deployment
+- Persistent storage considerations
+
+The main goal was not simply to call an LLM API, but to understand the architecture required to build and deploy a document-aware AI application.
+
+---
+
+📜 License
+
+This project is intended for educational and portfolio purposes.
