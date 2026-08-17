@@ -1,129 +1,62 @@
-🔬 AI Research Copilot
+# AI Research Copilot
 
-«An AI-powered research assistant that lets users upload research papers, build document-specific knowledge bases, and ask questions using Retrieval-Augmented Generation (RAG) with optional web search.»
+An AI-powered research assistant that lets users upload research papers, build document-specific knowledge bases, and ask questions using Retrieval-Augmented Generation (RAG) with optional web search.
 
-🌐 Live Demo: [Railway-hosted deployment](https://airesearchcopilot-production.up.railway.app/?utm_source=chatgpt.com)
-
-
-
-✨ Overview
-
-AI Research Copilot is a FastAPI-based research assistant designed to make working with research papers easier.
-
-Users can:
-
-- 🔐 Create a user session
-- 📄 Upload research papers as PDFs
-- 📚 Maintain multiple documents
-- 🎯 Select an active document for context
-- 💬 Ask questions about the selected paper
-- 🔎 Perform web searches when external information is required
-- 🧠 Combine information from uploaded documents and the web
-- ⚡ Generate contextual answers using an LLM
-
-The application combines RAG, LangGraph, LangChain, FAISS, Hugging Face embeddings, web search, and Groq-powered LLM inference into a single workflow.
+**Live Demo:** [Railway-hosted deployment](#)
 
 ---
 
-🚀 Live Application
+## Overview
 
-The application is deployed as a Dockerized FastAPI service.
+AI Research Copilot is a FastAPI-based research assistant that makes working with research papers easier. Users can:
 
-Live Demo:
-AI Research Copilot — Railway deployment
+- Create a user session
+- Upload research papers as PDFs
+- Maintain multiple documents
+- Select an active document for context
+- Ask questions about the selected paper
+- Perform web searches when external information is required
+- Combine information from uploaded documents and the web
+- Generate contextual answers using an LLM
 
----
-
-🧠 How It Works
-
-The application follows a document-aware RAG pipeline:
-
-                    ┌──────────────────┐
-                    │      User        │
-                    └────────┬─────────┘
-                             │
-                             ▼
-                    ┌──────────────────┐
-                    │    FastAPI API   │
-                    └────────┬─────────┘
-                             │
-                             ▼
-                    ┌──────────────────┐
-                    │   LangGraph      │
-                    │     Router       │
-                    └────────┬─────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-              ▼              ▼              ▼
-         ┌─────────┐    ┌──────────┐   ┌──────────┐
-         │   RAG   │    │ Web      │   │ Hybrid   │
-         │ Pipeline│    │ Search   │   │ Pipeline │
-         └────┬────┘    └────┬─────┘   └────┬─────┘
-              │              │              │
-              └──────────────┼──────────────┘
-                             ▼
-                    ┌──────────────────┐
-                    │   Groq LLM       │
-                    └────────┬─────────┘
-                             │
-                             ▼
-                    ┌──────────────────┐
-                    │    Final Answer  │
-                    └──────────────────┘
-
-RAG Pipeline
-
-When a PDF is uploaded:
-
-PDF
- ↓
-Text Extraction
- ↓
-Chunking
- ↓
-Hugging Face Embeddings
- ↓
-FAISS Vector Store
- ↓
-Similarity Retrieval
- ↓
-Relevant Context
- ↓
-LLM
- ↓
-Answer
-
-This allows the model to answer questions using the actual contents of the uploaded research paper instead of relying only on its pretrained knowledge.
+The application combines **RAG**, **LangGraph**, **LangChain**, **FAISS**, **Hugging Face embeddings**, **web search**, and **Groq-powered LLM inference** into a single workflow.
 
 ---
 
-🧩 Key Features
+## How It Works
 
-📄 Document-Aware RAG
+The application follows a document-aware RAG pipeline, orchestrated by a LangGraph router that directs each query to the RAG pipeline, web search, or a hybrid of both before passing context to the LLM for a final answer.
 
-Each uploaded document can be processed into its own vector representation.
+**Query flow:**
+```
+User → FastAPI API → LangGraph Router → [RAG | Web Search | Hybrid] → Groq LLM → Answer
+```
 
-The selected document becomes the active knowledge source for subsequent questions.
+**Document ingestion flow (on PDF upload):**
+```
+PDF → Text Extraction → Chunking → Hugging Face Embeddings
+    → FAISS Vector Store → Similarity Retrieval → Relevant Context
+    → LLM → Answer
+```
 
-🔎 Web Search
+This lets the model answer questions using the actual contents of the uploaded paper instead of relying only on its pretrained knowledge.
 
-The system can route questions toward web search when information outside the uploaded document is required.
+---
 
-🔀 Hybrid Retrieval
+## Key Features
 
-The LangGraph workflow supports combining:
+**Document-Aware RAG**
+Each uploaded document is processed into its own vector representation. The selected document becomes the active knowledge source for subsequent questions.
 
-- Retrieved PDF context
-- Web search results
-- LLM reasoning
+**Web Search**
+Routes questions toward web search when information outside the uploaded document is required.
 
-This allows the system to answer questions requiring both paper-specific information and external knowledge.
+**Hybrid Retrieval**
+The LangGraph workflow can combine retrieved PDF context, web search results, and LLM reasoning — answering questions that need both paper-specific and external knowledge.
 
-👤 User-Aware Storage
-
-Documents and user state are organized separately.
-
+**User-Aware Storage**
+Documents and user state are organized per user:
+```
 data/
 └── users/
     └── <username>/
@@ -131,51 +64,48 @@ data/
         │   ├── paper1.pdf
         │   └── paper2.pdf
         └── profile.json
+```
 
-🎯 Active Document Selection
-
-Users can upload multiple PDFs and explicitly choose which document should be used as the active knowledge source.
-
----
-
-🛠️ Tech Stack
-
-Category| Technology
-Backend| FastAPI
-LLM| Groq
-Agent Orchestration| LangGraph
-LLM Framework| LangChain
-Embeddings| Hugging Face
-Vector Database| FAISS
-Web Search| DuckDuckGo
-Containerization| Docker
-Deployment| Railway
-Database / Storage| Supabase
-Language| Python 3.11
+**Active Document Selection**
+Users can upload multiple PDFs and explicitly choose which one is used as the active knowledge source.
 
 ---
 
-📁 Project Structure
+## Tech Stack
 
+| Category | Technology |
+|---|---|
+| Backend | FastAPI |
+| LLM | Groq |
+| Agent Orchestration | LangGraph |
+| LLM Framework | LangChain |
+| Embeddings | Hugging Face |
+| Vector Database | FAISS |
+| Web Search | DuckDuckGo |
+| Database / Storage | Supabase |
+| Containerization | Docker |
+| Deployment | Railway |
+| Language | Python 3.11 |
+
+---
+
+## Project Structure
+
+```
 AI_Research_Copilot/
-│
 ├── agents/
 │   └── rag_agent.py
-│
 ├── api/
 │   ├── auth.py
 │   ├── chat.py
 │   └── upload.py
-│
 ├── data/
 │   └── pdfs/
-│
 ├── graph/
 │   ├── graph.py
 │   ├── nodes.py
 │   ├── router.py
 │   └── state.py
-│
 ├── rag/
 │   ├── chain.py
 │   ├── embeddings.py
@@ -183,17 +113,13 @@ AI_Research_Copilot/
 │   ├── retriever.py
 │   ├── splitter.py
 │   └── vectordb.py
-│
 ├── supabase/
 │   └── migrations/
-│
 ├── tools/
 │   └── search.py
-│
 ├── utils/
 │   ├── supabase_client.py
 │   └── user_state.py
-│
 ├── .dockerignore
 ├── .env.example
 ├── .gitignore
@@ -202,141 +128,106 @@ AI_Research_Copilot/
 ├── config.py
 ├── main.py
 └── requirements.txt
+```
 
 ---
 
-⚙️ Local Setup
+## Local Setup
 
-1. Clone the repository
-
+**1. Clone the repository**
+```bash
 git clone <repository-url>
 cd AI_Research_Copilot
+```
 
-2. Create a virtual environment
-
+**2. Create a virtual environment**
+```bash
 python -m venv .venv
-
-Activate it on Windows:
-
+```
+Activate it (Windows):
+```bash
 .venv\Scripts\activate
+```
 
-3. Install dependencies
-
+**3. Install dependencies**
+```bash
 pip install -r requirements.txt
+```
 
-4. Configure environment variables
+**4. Configure environment variables**
 
-Create a ".env" file:
-
+Create a `.env` file:
+```
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=your_model_name
-
+```
 Add any additional Supabase configuration required by the application.
 
-5. Run the application
-
+**5. Run the application**
+```bash
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
-
-Then open:
-
-http://127.0.0.1:8000
+```
+Then open: `http://127.0.0.1:8000`
 
 ---
 
-🐳 Running with Docker
+## Running with Docker
 
 Build the image:
-
+```bash
 docker build -t ai-research-copilot .
+```
 
 Run the container:
-
+```bash
 docker run -p 8000:8000 --env-file .env ai-research-copilot
+```
 
-The application will then be available locally on port "8000".
+The application will be available locally on port `8000`.
 
-Docker Architecture
-
-Dockerfile
-    ↓
-Docker Image
-    ↓
-Container
-    ↓
-FastAPI + Uvicorn
-    ↓
-Application
+**Docker flow:** `Dockerfile → Docker Image → Container → FastAPI + Uvicorn → Application`
 
 ---
 
-☁️ Deployment
+## Deployment
 
-The application is deployed using a Docker-based deployment workflow.
+The application deploys via a Docker-based workflow on Railway:
 
-GitHub Repository
-       │
-       ▼
-    Railway
-       │
-       ▼
-Docker Build
-       │
-       ▼
-Docker Image
-       │
-       ▼
-Running Container
-       │
-       ▼
-FastAPI Application
+```
+GitHub Repository → Railway → Docker Build → Docker Image → Running Container → FastAPI Application
+```
 
-Railway builds the application from the repository's "Dockerfile" and runs the resulting container.
-
-Environment secrets such as API keys should be configured through the deployment platform rather than committed to the repository.
+Railway builds the application from the repository's `Dockerfile` and runs the resulting container. Environment secrets such as API keys should be configured through the deployment platform rather than committed to the repository.
 
 ---
 
-🔐 Security Notes
+## Security Notes
 
-This project is primarily a learning and portfolio project and should not be considered production-grade authentication in its current form.
-
-Before exposing the application to real users, the following should be improved:
+This project is primarily a learning and portfolio project and should **not** be considered production-grade in its current form. Before exposing it to real users, the following should be improved:
 
 - Replace simplified authentication with proper authentication
 - Hash passwords
 - Add authorization checks
-- Validate uploaded files
-- Limit upload size
+- Validate uploaded files and limit upload size
 - Add API rate limiting
 - Protect sensitive endpoints
 - Move persistent files to proper object storage
 - Use production-grade user/session management
 - Add monitoring and logging
 
-Never commit ".env" files or API keys to GitHub.
+Never commit `.env` files or API keys to GitHub.
 
 ---
 
-💾 Storage Considerations
+## Storage Considerations
 
-The current application uses local filesystem storage for uploaded documents and locally generated vector data.
+The application currently uses local filesystem storage for uploaded documents and vector data. This works well for learning, demos, small-scale testing, and portfolio purposes — but ephemeral cloud containers can lose local files when underlying storage is recreated.
 
-This works well for:
-
-- Learning
-- Demonstrations
-- Small-scale testing
-- Portfolio projects
-
-However, ephemeral cloud containers can lose local files when the underlying storage is recreated.
-
-For a larger production system, uploaded documents should be stored in persistent object storage and vector indexes should be stored in a persistent or managed vector database.
+For a production system, uploaded documents should live in persistent object storage, and vector indexes should be stored in a persistent or managed vector database.
 
 ---
 
-📌 Current Limitations
-
-This project is intentionally lightweight and has several areas that could be improved:
+## Current Limitations
 
 - Authentication is simplified
 - Local filesystem storage limits horizontal scalability
@@ -346,13 +237,11 @@ This project is intentionally lightweight and has several areas that could be im
 - No sophisticated authorization system
 - No production-grade observability yet
 
-These are deliberate trade-offs for keeping the project simple and understandable.
+These are deliberate trade-offs made to keep the project simple and understandable.
 
 ---
 
-🔮 Future Improvements
-
-Potential improvements include:
+## Future Improvements
 
 - [ ] OAuth / JWT authentication
 - [ ] Persistent object storage for PDFs
@@ -370,30 +259,16 @@ Potential improvements include:
 
 ---
 
-🎯 What I Learned From This Project
+## What I Learned From This Project
 
-This project was built to explore how modern AI applications are assembled end-to-end.
+This project was built to explore how modern AI applications are assembled end-to-end. Key concepts explored:
 
-Key concepts explored:
+Retrieval-Augmented Generation (RAG) · Vector embeddings · Semantic search · FAISS · LangChain · LangGraph · Agentic routing · LLM inference · FastAPI · Docker · Environment-based configuration · Cloud deployment · Persistent storage considerations
 
-- Retrieval-Augmented Generation (RAG)
-- Vector embeddings
-- Semantic search
-- FAISS
-- LangChain
-- LangGraph
-- Agentic routing
-- LLM inference
-- FastAPI
-- Docker
-- Environment-based configuration
-- Cloud deployment
-- Persistent storage considerations
-
-The main goal was not simply to call an LLM API, but to understand the architecture required to build and deploy a document-aware AI application.
+The main goal wasn't simply to call an LLM API, but to understand the architecture required to build and deploy a document-aware AI application.
 
 ---
 
-📜 License
+## License
 
 This project is intended for educational and portfolio purposes.
