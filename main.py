@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -75,6 +74,7 @@ HTML_PAGE = """
     background-color: var(--bg-dark);
     color: var(--text-main);
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -82,7 +82,7 @@ HTML_PAGE = """
 
   /* Header */
   header {
-    padding: 16px 32px;
+    padding: 16px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -90,7 +90,7 @@ HTML_PAGE = """
     background: var(--bg-dark);
     z-index: 10;
     flex-shrink: 0;
-    gap: 16px;
+    gap: 12px;
   }
   header .brand {
     display: flex;
@@ -120,17 +120,27 @@ HTML_PAGE = """
     box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
   }
 
+  /* Mobile Toggle Button */
+  .menu-toggle {
+    display: none;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+
   /* Layout */
   main {
     flex: 1;
     display: grid;
     grid-template-columns: 300px 1fr;
     height: calc(100vh - 65px);
+    height: calc(100dvh - 65px);
     overflow: hidden;
-  }
-  @media (max-width: 900px) {
-    main { grid-template-columns: 1fr; }
-    .sidebar { display: none; }
+    position: relative;
   }
 
   .auth-card, .document-card {
@@ -188,8 +198,10 @@ HTML_PAGE = """
     padding: 24px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
     height: 100%;
+    transition: transform 0.3s ease;
+    z-index: 100;
   }
   .sidebar h2 {
     font-size: 0.75rem;
@@ -202,7 +214,7 @@ HTML_PAGE = """
   .dropzone {
     border: 1px dashed #404040;
     border-radius: var(--radius);
-    padding: 32px 16px;
+    padding: 24px 16px;
     text-align: center;
     color: var(--text-muted);
     cursor: pointer;
@@ -242,7 +254,17 @@ HTML_PAGE = """
   .badge.pending { background: rgba(163, 163, 163, 0.1); color: var(--text-muted); }
   .badge.error { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 
-  /* Chat Area - FIXED HEIGHT BREAKOUT */
+  /* Mobile Backdrop Overlay */
+  .sidebar-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 90;
+  }
+
+  /* Chat Area */
   .chat-area {
     display: flex;
     flex-direction: column;
@@ -253,7 +275,7 @@ HTML_PAGE = """
   .chat-window {
     flex: 1;
     overflow-y: auto;
-    padding: 40px 24px;
+    padding: 32px 24px;
     display: flex;
     flex-direction: column;
     gap: 32px;
@@ -362,9 +384,9 @@ HTML_PAGE = """
     background: #000;
   }
 
-  /* Input Area - SECURED DOWN AT BOTTOM */
+  /* Input Area */
   .input-wrapper {
-    padding: 0 24px 32px;
+    padding: 0 24px 24px;
     background: linear-gradient(0deg, var(--bg-dark) 85%, transparent);
     flex-shrink: 0;
   }
@@ -409,6 +431,37 @@ HTML_PAGE = """
   .input-box button:disabled { opacity: 0.3; cursor: not-allowed; }
   .input-box button svg { width: 20px; height: 20px; fill: currentColor; }
 
+  /* Mobile Responsive Dynamic Adjustments */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .menu-toggle { display: block; }
+    .sidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 85%;
+      max-width: 320px;
+      transform: translateX(-100%);
+      box-shadow: 10px 0 30px rgba(0,0,0,0.8);
+    }
+    .sidebar.active {
+      transform: translateX(0);
+    }
+    .sidebar-overlay.active {
+      display: block;
+    }
+    .chat-window {
+      padding: 20px 16px;
+      gap: 20px;
+    }
+    .msg-container.user .content {
+      max-width: 88%;
+    }
+    .input-wrapper {
+      padding: 0 12px 16px;
+    }
+  }
+
   /* Scrollbars styling */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -419,13 +472,19 @@ HTML_PAGE = """
 <body>
 
 <header>
-  <div class="brand"><span class="logo">✦</span> AI Research Copilot</div>
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <button class="menu-toggle" id="toggleSidebar" aria-label="Toggle Navigation">☰</button>
+    <div class="brand"><span class="logo">✦</span> AI Research Copilot</div>
+  </div>
   <div class="status" id="statusBadge"><span class="dot"></span> System Online</div>
 </header>
 
 <main>
+  <!-- Mobile Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
   <!-- Sidebar -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="auth-card">
       <h2>Access</h2>
       <input id="usernameInput" placeholder="Your name" />
@@ -488,8 +547,22 @@ const loginMessage  = document.getElementById('loginMessage');
 const statusBadge   = document.getElementById('statusBadge');
 const documentRadioGroup = document.getElementById('documentRadioGroup');
 const switchDocumentBtn = document.getElementById('switchDocumentBtn');
+
+const toggleSidebarBtn = document.getElementById('toggleSidebar');
+const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebarOverlay');
+
 let currentUser = '';
 let currentDocuments = [];
+
+// ---------- Mobile Drawer Logic ----------
+function toggleSidebar() {
+  sidebar.classList.toggle('active');
+  sidebarOverlay.classList.toggle('active');
+}
+
+toggleSidebarBtn.addEventListener('click', toggleSidebar);
+sidebarOverlay.addEventListener('click', toggleSidebar);
 
 // Toggle the send button state based on the input string length
 questionInput.addEventListener('input', () => {
